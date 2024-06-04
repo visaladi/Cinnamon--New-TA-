@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .upload-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .upload-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4caf50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        #result {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        #result p {
+            margin: 0;
+            padding: 10px 0;
+        }
+
+        #result ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        #result li {
+            list-style-type: disc;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Excel Analyzer</h1>
+        <div class="upload-container">
+            <label for="fileInput" class="upload-button">Upload Excel</label>
+            <input type="file" id="fileInput" style="display:none;">
+        </div>
+        <div id="result"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.2/xlsx.full.min.js"></script>
+    <script>
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: true });
+                    const filteredData = filterData(jsonData);
+                    const filteredDates = getFilteredDates(filteredData);
+                    const filteredValues = getFilteredValues(filteredData);
+                    createExcel(filteredDates, filteredValues);
+                    displayResults(filteredDates, filteredValues);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                alert('Please select an Excel file.');
+            }
+        }
+
+        function filterData(data) {
+            return data.filter(row => row.NO_OF_ROOMS1 < 25 && row.MARKET_CODE === 'Total');
+        }
+
+        function getFilteredDates(data) {
+            return data.map(row => row.BUSINESS_DATE).filter((value, index, self) => self.indexOf(value) === index);
+        }
+
+        function getFilteredValues(data) {
+            return data.map(row => row.SOME_VALUE); // Replace SOME_VALUE with the actual column name for the values you want to print
+        }
+
+        function displayResults(dates, values) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '';
+            if (dates.length > 0) {
+                const header = document.createElement('h3');
+                header.textContent = 'Dates where NO_OF_ROOMS1 < 30 in Total:';
+                resultDiv.appendChild(header);
+                const ul = document.createElement('ul');
+                dates.forEach((date, index) => {
+                    const li = document.createElement('li');
+                    li.textContent = `${date} - Value: ${values[index]}`;
+                    ul.appendChild(li);
+                });
+                resultDiv.appendChild(ul);
+            } else {
+                const message = document.createElement('p');
+                message.textContent = 'No dates found where NO_OF_ROOMS1 < 30 in Total.';
+                resultDiv.appendChild(message);
+            }
+        }
+
+        function createExcel(dates, values) {
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([['Date', 'Value']]);
+            
+            // Populate Excel sheet and color cells for filtered dates
+            dates.forEach((date, index) => {
+                const cellRefDate = XLSX.utils.encode_cell({ r: index + 1, c: 0 });
+                const cellRefValue = XLSX.utils.encode_cell({ r: index + 1, c: 1 });
+                ws[cellRefDate] = { t: 's', v: date };
+                ws[cellRefValue] = { t: 'n', v: values[index] };
+                ws[cellRefDate].s = { fill: { fgColor: { rgb: 'FFFF00' } } }; // Yellow fill color for date
+                ws[cellRefValue].s = { fill: { fgColor: { rgb: 'FFFF00' } } }; // Yellow fill color for value
+            });
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Filtered Dates');
+            XLSX.writeFile(wb, 'filtered_dates.xlsx');
+        }
+    </script>
+</body>
+</html>
