@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .upload-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .upload-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4caf50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #result {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        #result p {
+            margin: 0;
+            padding: 10px 0;
+        }
+
+        #result ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        #result li {
+            list-style-type: disc;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Excel Analyzer</h1>
+        <div class="upload-container">
+            <label for="fileInput" class="upload-button">Upload Excel</label>
+            <input type="file" id="fileInput" style="display:none;">
+        </div>
+        <div id="filterOptions">
+            <label for="category">Choose Category to Filter:</label>
+            <select id="category">
+                <option value="Cinnamon Grand">Cinnamon Grand</option>
+                <option value="Cinnamon Lakeside">Cinnamon Lakeside</option>
+                <option value="Cinnamon Red">Cinnamon Red</option>
+            </select>
+            <div id="thresholdInputs">
+                <!-- Input fields for threshold values -->
+                <label for="threshold">Threshold:</label>
+                <input type="number" id="threshold" min="0">
+            </div>
+        </div>
+        <button id="filterButton">Filter</button>
+        <div id="result"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.2/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script>
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+        function handleFileSelect(event) {
+            // Functionality remains the same
+        }
+
+        function getFilteredDates(data, category, threshold) {
+            return data.filter(row => row[category] < threshold && row.MARKET_CODE === 'Total')
+                       .map(row => row.BUSINESS_DATE)
+                       .filter((value, index, self) => self.indexOf(value) === index);
+        }
+
+        function updateResultDiv(message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '';
+            const p = document.createElement('p');
+            p.textContent = message;
+            resultDiv.appendChild(p);
+        }
+
+        function exportToExcel(data) {
+            const resultDiv = document.getElementById('result');
+            updateResultDiv('Filtered Details:');
+            const ul = document.createElement('ul');
+            
+            // Add column titles
+            const titles = ['BUSINESS_DATE']; // Adjust according to your column titles
+            const liTitle = document.createElement('li');
+            liTitle.textContent = titles.join(' | ');
+            ul.appendChild(liTitle);
+
+            // Add filtered data
+            data.forEach(date => {
+                const li = document.createElement('li');
+                li.textContent = date;
+                ul.appendChild(li);
+            });
+            resultDiv.appendChild(ul);
+
+            // Export to Excel
+            const wb = XLSX.utils.book_new();
+            const ws_name = "Filtered Details";
+            const ws_data = [titles].concat(data.map(date => [date]));
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+            XLSX.utils.book_append_sheet(wb, ws, ws_name);
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            saveAs(new Blob([wbout], { type: 'application/octet-stream' }), 'filtered_details.xlsx');
+        }
+
+        // Function to handle filter button click
+        document.getElementById('filterButton').addEventListener('click', function() {
+            const selectedCategory = document.getElementById('category').value;
+            const threshold = parseInt(document.getElementById('threshold').value);
+
+            // Check if threshold is provided
+            if (!isNaN(threshold)) {
+                const fileInput = document.getElementById('fileInput');
+                const file = fileInput.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: true });
+                        const dates = getFilteredDates(jsonData, selectedCategory, threshold);
+                        if (dates.length > 0) {
+                            exportToExcel(dates);
+                        } else {
+                            updateResultDiv('No dates found where ' + selectedCategory + ' is below the specified threshold in Total.');
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    updateResultDiv('Please select an Excel file.');
+                }
+            } else {
+                updateResultDiv('Please provide the threshold value.');
+            }
+        });
+    </script>
+</body>
+</html>
